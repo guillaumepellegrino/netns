@@ -59,3 +59,11 @@ Destroying network namespace test
 NETNS Inode: 4026534538
 guillaume@nix:~$ 
 ```
+
+## Installation
+- Install rust toolchain from https://rustup.rs/
+
+- Install application from rust package manager
+```
+cargo add netns-utils
+```
