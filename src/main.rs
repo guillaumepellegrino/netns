@@ -36,6 +36,7 @@ struct Args {
 
 struct Netns {
     name: String,
+    interfaces: Vec<String>,
     dirpath: String,
     netnspath: String,
     utsnspath: String,
@@ -76,6 +77,7 @@ impl Netns {
     pub fn new(args: &Args) -> Self {
         Self {
             name: args.name.clone(),
+            interfaces: args.ifname.clone(),
             dirpath: format!("{}/{}", NETNS_DIR, &args.name),
             netnspath: format!("{}/{}/net", NETNS_DIR, &args.name),
             utsnspath: format!("{}/{}/uts", NETNS_DIR, &args.name),
@@ -168,6 +170,13 @@ impl Netns {
         mount_bind(format!("/proc/{}/ns/net", pid).as_str(), self.netnspath.as_str())?;
         mount_bind(format!("/proc/{}/ns/uts", pid).as_str(), self.utsnspath.as_str())?;
         mount_bind(format!("/proc/{}/ns/mnt", pid).as_str(), self.mntnspath.as_str())?;
+
+
+        for ifname in &self.interfaces {
+            Self::interface_setnetns(ifname, pid)
+                .wrap_err(format!("Failed to set interface {} in netns", ifname))?;
+        }
+
         child.kill()?;
 
         Ok(())
@@ -224,7 +233,11 @@ impl Netns {
         }
     }
 
-    pub fn add_interface(&self, _ifname: &str) -> Result<()> {
+    fn interface_setnetns(ifname: &str, netnspid: u32) -> Result<()> {
+        let netns = format!("{}", netnspid);
+        Command::new("ip")
+            .arg("link").arg("set").arg(ifname).arg("netns").arg(netns)
+            .status()?;
         Ok(())
     }
 
@@ -288,7 +301,6 @@ fn main() -> Result<()> {
     if args.name.is_empty() {
         return Err(eyre!("Missing --name argument"));
     }
-
     let netns = Netns::new(&args);
 
     if args.do_create {
@@ -314,11 +326,6 @@ fn main() -> Result<()> {
     if !netns.exists() {
         netns.create()
             .wrap_err("Failed to create network namespace")?;
-    }
-
-    for ifname in &args.ifname {
-        netns.add_interface(&ifname)
-            .wrap_err(format!("Failed to add interface {}", ifname))?;
     }
 
     if let Err(e) = netns.refcount_increment() {
