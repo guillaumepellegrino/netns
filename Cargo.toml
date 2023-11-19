@@ -1,5 +1,5 @@
 [package]
-name = "netns"
+name = "netns-utils"
 version = "0.1.0"
 edition = "2021"
 description = "Network Namespace Utils"
@@ -9,6 +9,10 @@ license = "GPL-3.0-or-later"
 authors = ["Guillaume Pellegrino <guillaume.pellegrino@yahoo.com>"]
 keywords = ["network", "namespaces", "linux", "container"]
 categories = ["network-programming"]
+
+[[bin]]
+name = "netns"
+path = "src/main.rs"
 
 [dependencies]
 nix = {version = "0.27.1", features = ["user", "hostname", "mount", "signal", "sched", "fs"]}
