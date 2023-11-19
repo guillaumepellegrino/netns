@@ -1,11 +1,11 @@
 use clap::Parser;
 use std::path::{Path, PathBuf};
 use std::fs::File;
-use std::os::fd::AsFd;
+use std::os::fd::{AsFd, AsRawFd};
 use std::ffi::CString;
 use std::os::linux::fs::MetadataExt;
 use std::process::Command;
-use std::io::Read;
+use std::io::{Read, Write, Seek};
 use eyre::{eyre, Result, WrapErr};
 
 static NETNS_DIR: &str = "/tmp/netns";
@@ -252,16 +252,33 @@ impl Netns {
         Ok(())
     }
 
-    pub fn refcount_increment(&self) {
+    fn refcount_inspect<F: FnMut(i32)->i32>(&self, mut inspect: F) -> Result<i32> {
+        let mut file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&self.refcountpath)
+            .wrap_err("open failed")?;
+        let fd = file.as_raw_fd();
+        nix::fcntl::flock(fd, nix::fcntl::FlockArg::LockExclusive).wrap_err("flock failed")?;
+        let mut string = String::new();
+        file.read_to_string(&mut string).wrap_err("read failed")?;
+        let refcount = string.parse::<i32>().unwrap_or(0);
+        let new_refcount = inspect(refcount);
 
+        if new_refcount != refcount {
+            file.set_len(0).wrap_err("truncate failed")?;
+            file.rewind().wrap_err("rewind failed")?;
+            file.write_fmt(format_args!("{}", new_refcount)).wrap_err("write failed")?;
+        }
+        Ok(new_refcount)
     }
 
-    pub fn refcount_decrement(&self) {
-
+    pub fn refcount_increment(&self) -> Result<i32> {
+        self.refcount_inspect(|refcount| refcount + 1)
     }
 
-    pub fn refcount(&self) -> i32 {
-        0
+    pub fn refcount_decrement(&self) -> Result<i32> {
+        self.refcount_inspect(|refcount| refcount - 1)
     }
 }
 
@@ -304,11 +321,20 @@ fn main() -> Result<()> {
             .wrap_err(format!("Failed to add interface {}", ifname))?;
     }
 
-    netns.refcount_increment();
+    if let Err(e) = netns.refcount_increment() {
+        println!("Failed to increment refcount: {}", e);
+    }
     netns.join();
-    netns.refcount_decrement();
-
-    if netns.refcount() <= 0 {
+    let refcount = match netns.refcount_decrement() {
+        Ok(refcount) => refcount,
+        Err(e) => {
+            println!("Failed to decrement refcount: {}", e);
+            println!("Assuming refcount = 0");
+            0
+        }
+    };
+    println!("netns reference count: {}", refcount);
+    if refcount <= 0 {
         netns.destroy()
             .wrap_err("Failed to destroy network namespace")?;
     }
