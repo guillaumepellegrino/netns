@@ -19,7 +19,7 @@ Options:
 ## Examples
 1. Create a network namespace 'test' with 'eno1' interface in it:
 ```
-guillaume@nix:~$ sudo netns -n test -i enp5s0
+guillaume@nix:~$ netns -n test -i enp5s0
 Creating network namespace test
 Joining network namespace test
 guillaume@test:~$ ip link
@@ -36,7 +36,7 @@ guillaume@nix:~$ ip link
     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
 5: dummy0: <BROADCAST,NOARP> mtu 1500 qdisc noop state DOWN mode DEFAULT group default qlen 1000
     link/ether de:e8:6d:eb:72:30 brd ff:ff:ff:ff:ff:ff
-guillaume@nix:~$ sudo netns -n test
+guillaume@nix:~$ netns -n test
 Joining network namespace test
 guillaume@test:~$ ip link
 1: lo: <LOOPBACK> mtu 65536 qdisc noop state DOWN mode DEFAULT group default qlen 1000
